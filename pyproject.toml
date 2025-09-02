@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multi-agent-cli-tool"
+version = "0.1.0"
+description = "A CLI tool for multi-agent collaboration based on LangGraph"
+authors = [{name = "Developer", email = "developer@example.com"}]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "langgraph>=0.6.0",
+    "click>=8.0",
+    "pydantic>=2.0",
+    "dataclasses>=0.6",
+    "typing-extensions>=4.0",
+    "uuid>=1.30",
+]
+
+[project.scripts]
+multi-agent-cli = "multi_agent_cli.cli.main:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["multi_agent_cli*"]
