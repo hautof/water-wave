@@ -11,6 +11,7 @@ class AgentConfig:
     model: str = "gpt-3.5-turbo"
     temperature: float = 0.7
     max_tokens: int = 1500
+    provider: str = "openai"
     capabilities: list = field(default_factory=list)
 
 

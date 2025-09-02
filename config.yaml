@@ -5,6 +5,7 @@ system:
 agents:
   analyst:
     model: gpt-4
+    provider: openai
     temperature: 0.2
     max_tokens: 2000
     capabilities:
@@ -13,6 +14,7 @@ agents:
     - strategy_planning
   executor:
     model: gpt-3.5-turbo
+    provider: openai
     temperature: 0.1
     max_tokens: 1500
     capabilities:
@@ -21,12 +23,26 @@ agents:
     - api_calls
   validator:
     model: gpt-4
+    provider: openai
     temperature: 0.0
     max_tokens: 1000
     capabilities:
     - result_validation
     - quality_assurance
     - compliance_check
+llm_providers:
+  openai:
+    api_key: ${OPENAI_API_KEY}
+    base_url: https://api.openai.com/v1
+    default_model: gpt-3.5-turbo
+  qwen:
+    api_key: ${QWEN_API_KEY}
+    base_url: https://dashscope.aliyuncs.com/api/v1
+    default_model: qwen-plus
+  deepseek:
+    api_key: ${DEEPSEEK_API_KEY}
+    base_url: https://api.deepseek.com/v1
+    default_model: deepseek-chat
 message_bus:
   queue_size: 1000
   batch_size: 10

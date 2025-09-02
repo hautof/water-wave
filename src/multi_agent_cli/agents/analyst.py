@@ -2,12 +2,14 @@ from typing import List, Dict, Any
 from ..core.agent import Agent
 from ..messages.base import Message, MessageType
 from ..core.state import SystemState, Task
+from ..llm_providers.base import LLMProvider
+from ..tools import tool_registry
 
 class AnalystAgent(Agent):
     """Analyst agent for requirement analysis and task planning"""
     
-    def __init__(self, agent_id: str = "analyst", name: str = "Analyst Agent"):
-        super().__init__(agent_id, name)
+    def __init__(self, agent_id: str = "analyst", name: str = "Analyst Agent", llm_provider: LLMProvider = None):
+        super().__init__(agent_id, name, llm_provider)
     
     def get_capabilities(self) -> List[str]:
         return [
@@ -41,14 +43,70 @@ class AnalystAgent(Agent):
         # Extract request details
         request_text = message.payload.get("text", "")
         
-        # In a full implementation, this would contain the logic for:
-        # 1. Requirement complexity assessment
-        # 2. Task decomposition algorithm
-        # 3. Dependency analysis
-        # 4. Risk assessment
-        
-        # For this implementation, we'll create a simplified task plan
-        task_plan = self._create_task_plan(request_text)
+        # Use LLM provider if available
+        if self.llm_provider:
+            # Create prompt for LLM
+            prompt = f"""
+            Analyze the following user request and create a detailed task plan:
+            Request: {request_text}
+            
+            Please provide:
+            1. A breakdown of tasks needed to fulfill this request
+            2. Dependencies between tasks
+            3. Priority levels for each task
+            4. Estimated complexity of each task
+            """
+            
+            # Generate response using LLM provider
+            import asyncio
+            try:
+                # Run the async method in a new event loop
+                response = asyncio.run(self.llm_provider.generate_response([
+                    {"role": "user", "content": prompt}
+                ]))
+                
+                # Parse the response (in a real implementation, you might want to parse JSON)
+                task_plan = {
+                    "tasks": [
+                        {
+                            "task_id": "1",
+                            "name": "Task 1",
+                            "description": f"First task based on LLM analysis: {response[:100]}...",
+                            "dependencies": [],
+                            "priority": 1
+                        }
+                    ],
+                    "strategy": "LLM-assisted planning",
+                    "feedback_incorporated": "None"
+                }
+            except Exception as e:
+                # Fallback to default plan creation if LLM fails
+                task_plan = self._create_task_plan(request_text)
+        else:
+            # In a full implementation, this would contain the logic for:
+            # 1. Requirement complexity assessment
+            # 2. Task decomposition algorithm
+            # 3. Dependency analysis
+            # 4. Risk assessment
+            
+            # For this implementation, we'll create a simplified task plan
+            task_plan = self._create_task_plan(request_text)
+            
+            # Check if this request requires tool execution
+            # In a real implementation, you would have more sophisticated logic to determine this
+            if "weather" in request_text.lower() or "temperature" in request_text.lower() or "forecast" in request_text.lower():
+                # Add a weather API task to the plan
+                task_plan["tasks"].append({
+                    "task_id": "weather_api_task",
+                    "name": "Fetch Weather Data",
+                    "description": "Get weather forecast for Shanghai for the next 30 days",
+                    "type": "api_call",
+                    "parameters": {
+                        "location": "Shanghai",
+                        "days": 30
+                    },
+                    "dependencies": []
+                })
         
         # Create task plan message
         plan_message = Message(

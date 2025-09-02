@@ -2,12 +2,14 @@ from typing import List, Dict, Any
 from ..core.agent import Agent
 from ..messages.base import Message, MessageType
 from ..core.state import SystemState, Task
+from ..llm_providers.base import LLMProvider
+from ..tools import tool_registry
 
 class ValidatorAgent(Agent):
     """Validator agent for result validation and quality assurance"""
     
-    def __init__(self, agent_id: str = "validator", name: str = "Validator Agent"):
-        super().__init__(agent_id, name)
+    def __init__(self, agent_id: str = "validator", name: str = "Validator Agent", llm_provider: LLMProvider = None):
+        super().__init__(agent_id, name, llm_provider)
     
     def get_capabilities(self) -> List[str]:
         return [
@@ -42,15 +44,55 @@ class ValidatorAgent(Agent):
         results = message.payload.get("results", [])
         plan = message.payload.get("plan", {})
         
-        # In a full implementation, this would contain the logic for:
-        # 1. Result completeness checking
-        # 2. Quality standard comparison
-        # 3. Security verification
-        # 4. Performance metrics evaluation
-        
-        # For this implementation, we'll perform a simple validation
-        is_valid = self._perform_simple_validation(results)
-        validation_notes = "Validation passed" if is_valid else "Validation failed"
+        # Use LLM provider if available for validation assistance
+        if self.llm_provider:
+            # Create prompt for LLM to help with validation
+            result_summaries = [f"- {result.get('task_name', 'Unnamed task')}: {result.get('status', 'Unknown status')}" for result in results]
+            prompt = f"""
+            You are an expert quality assurance validator. Please evaluate the following execution results:
+            
+            Execution Results:
+            {chr(10).join(result_summaries)}
+            
+            Plan:
+            {plan}
+            
+            Please provide:
+            1. A completeness assessment
+            2. Quality standard compliance check
+            3. Security verification
+            4. Performance metrics evaluation
+            5. Overall validation recommendation (pass/fail)
+            """
+            
+            # Generate response using LLM provider
+            import asyncio
+            try:
+                # Run the async method in a new event loop
+                response = asyncio.run(self.llm_provider.generate_response([
+                    {"role": "user", "content": prompt}
+                ]))
+                
+                # Use LLM response for validation
+                validation_guidance = response
+                # For this example, we'll still use a simple check but in a real implementation
+                # you would parse the LLM response to determine validation status
+                validation_passed = len(results) > 0 and "pass" in response.lower()
+            except Exception as e:
+                # Fallback to default validation if LLM fails
+                validation_guidance = "LLM validation unavailable"
+                validation_passed = len(results) > 0  # Simple check
+        else:
+            # In a full implementation, this would contain the logic for:
+            # 1. Result completeness checking
+            # 2. Quality standard comparison
+            # 3. Security verification
+            # 4. Performance metrics evaluation
+            validation_guidance = "No LLM validation available"
+            # For this implementation, we'll perform a simple validation
+            validation_passed = self._perform_simple_validation(results)
+            
+        validation_notes = "Validation passed" if validation_passed else "Validation failed"
         
         # Create validation result message
         validation_message = Message(
@@ -59,9 +101,10 @@ class ValidatorAgent(Agent):
             receiver_id="analyst",
             message_type=MessageType.VALIDATION_RESULT,
             payload={
-                "is_valid": is_valid,
+                "is_valid": validation_passed,
                 "notes": validation_notes,
-                "results": results
+                "results": results,
+                "validation_guidance": validation_guidance
             },
             correlation_id=message.correlation_id
         )

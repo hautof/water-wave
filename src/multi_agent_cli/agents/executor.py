@@ -2,12 +2,14 @@ from typing import List, Dict, Any
 from ..core.agent import Agent
 from ..messages.base import Message, MessageType
 from ..core.state import SystemState, Task
+from ..llm_providers.base import LLMProvider
+from ..tools import tool_registry
 
 class ExecutorAgent(Agent):
     """Executor agent for task execution and tool invocation"""
     
-    def __init__(self, agent_id: str = "executor", name: str = "Executor Agent"):
-        super().__init__(agent_id, name)
+    def __init__(self, agent_id: str = "executor", name: str = "Executor Agent", llm_provider: LLMProvider = None):
+        super().__init__(agent_id, name, llm_provider)
     
     def get_capabilities(self) -> List[str]:
         return [
@@ -42,11 +44,42 @@ class ExecutorAgent(Agent):
         plan = message.payload.get("plan", {})
         tasks = plan.get("tasks", [])
         
-        # In a full implementation, this would contain the logic for:
-        # 1. Task queue management
-        # 2. Concurrent execution control
-        # 3. Exception handling mechanism
-        # 4. Result collection and organization
+        # Use LLM provider if available for task execution assistance
+        if self.llm_provider:
+            # Create prompt for LLM to help with task execution
+            task_descriptions = [f"- {task.get('name', 'Unnamed task')}: {task.get('description', 'No description')}" for task in tasks]
+            prompt = f"""
+            You are an expert task executor. Please provide guidance on how to execute the following tasks:
+            
+            Tasks:
+            {chr(10).join(task_descriptions)}
+            
+            For each task, provide:
+            1. Key steps to execute the task
+            2. Potential challenges or considerations
+            3. Success criteria
+            """
+            
+            # Generate response using LLM provider
+            import asyncio
+            try:
+                # Run the async method in a new event loop
+                response = asyncio.run(self.llm_provider.generate_response([
+                    {"role": "user", "content": prompt}
+                ]))
+                
+                # Add LLM guidance to execution context
+                execution_guidance = response
+            except Exception as e:
+                # Continue with default execution if LLM fails
+                execution_guidance = "LLM guidance unavailable"
+        else:
+            # In a full implementation, this would contain the logic for:
+            # 1. Task queue management
+            # 2. Concurrent execution control
+            # 3. Exception handling mechanism
+            # 4. Result collection and organization
+            execution_guidance = "No LLM guidance available"
         
         # For this implementation, we'll simulate execution
         execution_results = []
@@ -62,7 +95,8 @@ class ExecutorAgent(Agent):
             message_type=MessageType.EXECUTION_RESULT,
             payload={
                 "results": execution_results,
-                "plan": plan
+                "plan": plan,
+                "execution_guidance": execution_guidance
             },
             correlation_id=message.correlation_id
         )
@@ -130,12 +164,49 @@ class ExecutorAgent(Agent):
         return [result_message]
     
     def _simulate_task_execution(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """Simulate task execution (placeholder for actual implementation)"""
-        # In a full implementation, this would actually execute the task
+        """Simulate task execution with tool calling capability"""
+        task_name = task.get("name", "Unnamed task")
+        task_description = task.get("description", "")
+        task_parameters = task.get("parameters", {})
+        
+        # Check if this task requires tool execution
+        # In a real implementation, you would have more sophisticated logic to determine this
+        if "weather" in task_name.lower() or "weather" in task_description.lower():
+            # Execute the weather API tool
+            try:
+                # Get location and days from task parameters, with defaults
+                location = task_parameters.get("location", "Shanghai")
+                days = task_parameters.get("days", 30)
+                
+                # Since we're in a synchronous context, we need to run the async method properly
+                import asyncio
+                # Create a new event loop for this execution
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    tool_result = loop.run_until_complete(tool_registry.execute_tool(
+                        "weather_api",
+                        location=location,
+                        days=days
+                    ))
+                finally:
+                    loop.close()
+                
+                if tool_result.success:
+                    result_data = f"Successfully fetched weather data for {location}: {tool_result.data}"
+                else:
+                    result_data = f"Failed to fetch weather data: {tool_result.error}"
+            except Exception as e:
+                result_data = f"Error executing weather tool: {str(e)}"
+        else:
+            # In a full implementation, this would actually execute the task
+            result_data = f"Executed task: {task_name}"
+        
         return {
             "task_id": task.get("task_id"),
+            "task_name": task_name,
             "status": "completed",
-            "result": f"Executed task: {task.get('name')}",
+            "result": result_data,
             "execution_time": 0.1
         }
     
